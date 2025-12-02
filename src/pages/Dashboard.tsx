@@ -316,7 +316,7 @@ const Dashboard = () => {
           <Card className="p-4">
             <div className="grid grid-cols-1 lg:grid-cols-[2fr,1.2fr] gap-6 items-start">
               <div>
-                <p className="text-sm font-medium mb-2">Timeline</p>
+            <p className="text-sm font-medium mb-2">Timeline</p>
                 {timeline.length === 0 ? (
                   <div className="h-32 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
                     No completed Pomodoro sessions recorded in the last 7 days.

@@ -2,6 +2,9 @@
 
 A comprehensive study tracking and productivity application built with React, TypeScript, and Supabase. Track your subjects, manage topics, monitor study sessions with Pomodoro timer, and stay organized with exams and todos.
 
+<img width="1897" height="862" alt="image" src="https://github.com/user-attachments/assets/f7c9042e-41e3-4c2e-8de8-eb218cf83b74" />
+
+
 ## Features
 
 ### 📚 Subject & Topic Management

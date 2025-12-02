@@ -75,6 +75,7 @@ export type Database = {
           file_size: number | null
           file_url: string | null
           id: string
+          sort_order: number | null
           subject_id: string | null
           title: string
           topic_id: string | null
@@ -88,6 +89,7 @@ export type Database = {
           file_size?: number | null
           file_url?: string | null
           id?: string
+          sort_order?: number | null
           subject_id?: string | null
           title: string
           topic_id?: string | null
@@ -101,6 +103,7 @@ export type Database = {
           file_size?: number | null
           file_url?: string | null
           id?: string
+          sort_order?: number | null
           subject_id?: string | null
           title?: string
           topic_id?: string | null
@@ -268,34 +271,46 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          is_shared: boolean | null
           last_revised_at: string | null
           name: string
           revision_count: number | null
+          share_token: string | null
+          sort_order: number | null
           subject_id: string
           updated_at: string | null
           user_id: string
+          video_url: string | null
         }
         Insert: {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_shared?: boolean | null
           last_revised_at?: string | null
           name: string
           revision_count?: number | null
+          share_token?: string | null
+          sort_order?: number | null
           subject_id: string
           updated_at?: string | null
           user_id: string
+          video_url?: string | null
         }
         Update: {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_shared?: boolean | null
           last_revised_at?: string | null
           name?: string
           revision_count?: number | null
+          share_token?: string | null
+          sort_order?: number | null
           subject_id?: string
           updated_at?: string | null
           user_id?: string
+          video_url?: string | null
         }
         Relationships: [
           {

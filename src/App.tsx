@@ -9,6 +9,8 @@ import PomodoroPage from "./pages/PomodoroPage";
 import AITutorPage from "./pages/AITutorPage";
 import SubjectPage from "./pages/SubjectPage";
 import TopicResourcesPage from "./pages/TopicResourcesPage";
+import SharedTopicPage from "./pages/SharedTopicPage";
+import TopicPlaylistPage from "./pages/TopicPlaylistPage";
 import DatesheetPage from "./pages/DatesheetPage";
 import CalendarPage from "./pages/CalendarPage";
 import NotFound from "./pages/NotFound";
@@ -33,6 +35,8 @@ const App = () => (
           <Route path="/datesheet" element={<DatesheetPage />} />
           {/* More specific topic-resources route should be defined before the generic subject route */}
           <Route path="/subject/:subjectId/topic/:topicId/resources" element={<TopicResourcesPage />} />
+          <Route path="/subject/:subjectId/playlist/:topicName" element={<TopicPlaylistPage />} />
+          <Route path="/shared/topic/:shareToken" element={<SharedTopicPage />} />
           <Route path="/subject/:id" element={<SubjectPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/help" element={<HelpPage />} />

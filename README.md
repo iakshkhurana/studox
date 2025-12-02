@@ -82,6 +82,15 @@ npm run dev
 
 The application will be available at `http://localhost:5173`
 
+## Demo Credentials
+
+You can use the following demo credentials to test the application:
+
+- **Email**: `khuranaaksh08@gmail.com`
+- **Password**: `123456`
+
+> **Note**: These are demo credentials for testing purposes. Please do not use them for production or store sensitive data.
+
 ## Project Structure
 
 ```

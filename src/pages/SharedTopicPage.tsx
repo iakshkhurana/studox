@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileText, FileDown, Eye } from "lucide-react";
+import { ArrowLeft, FileText, FileDown, Eye, Link as LinkIcon, ExternalLink } from "lucide-react";
 import { AppSidebarLayout } from "@/components/AppSidebarLayout";
 import {
   Dialog,
@@ -33,9 +33,17 @@ interface TopicNote {
   file_url: string | null;
   file_name: string | null;
   file_size: number | null;
+  content: string | null;
   created_at: string | null;
   sort_order: number | null;
 }
+
+/**
+ * Checks if a note is a link (has content URL but no file_url).
+ */
+const isLinkNote = (note: TopicNote): boolean => {
+  return !note.file_url && !!note.content && (note.content.startsWith("http://") || note.content.startsWith("https://"));
+};
 
 /**
  * Shared topic page for viewing topics shared via share_token.
@@ -101,25 +109,35 @@ const SharedTopicPage = () => {
         setSubject(subjectData);
       }
 
-      // Fetch notes/PPTs for this topic
-      // Note: We need to fetch notes, but they're private. We'll need to handle this differently.
-      // For now, we'll try to fetch them, but they might fail due to RLS.
-      // In a production app, you might want to create a public view or function for shared topics.
+      // Fetch notes/PPTs and links for this topic
+      // RLS policy allows public access to notes for shared topics
       const { data: notesData, error: notesError } = await supabase
         .from("notes")
-        .select("id, title, file_url, file_name, file_size, created_at, sort_order")
+        .select("id, title, file_url, file_name, file_size, content, created_at, sort_order")
         .eq("topic_id", topicData.id)
-        .not("file_url", "is", null)
+        .or("file_url.not.is.null,content.not.is.null")
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
 
       if (notesError) {
-        console.error("Error loading notes (may be due to RLS):", notesError);
-        // Notes might not be accessible due to RLS, but that's okay
-        // We'll just show an empty list
+        console.error("Error loading notes:", notesError);
+        toast({
+          title: "Error loading resources",
+          description: notesError.message,
+          variant: "destructive",
+        });
       } else {
+        // Filter to only include notes with file_url OR content that is a URL
+        const filteredData = (notesData || []).filter((note) => {
+          if (note.file_url) return true; // File-based note
+          if (note.content && (note.content.startsWith("http://") || note.content.startsWith("https://"))) {
+            return true; // Link-based note
+          }
+          return false;
+        });
+        
         // Ensure all notes have a sort_order value
-        const notesWithSortOrder = (notesData || []).map((note, index) => ({
+        const notesWithSortOrder = filteredData.map((note, index) => ({
           ...note,
           sort_order: note.sort_order ?? index + 1,
         }));
@@ -152,6 +170,82 @@ const SharedTopicPage = () => {
    */
   const getYouTubeEmbedUrl = (videoId: string): string => {
     return `https://www.youtube.com/embed/${videoId}`;
+  };
+
+  /**
+   * Checks if a URL is a YouTube URL.
+   */
+  const isYouTubeUrl = (url: string): boolean => {
+    return /(?:youtube\.com|youtu\.be)/.test(url);
+  };
+
+  /**
+   * Checks if a URL is a Google Drive URL.
+   */
+  const isGoogleDriveUrl = (url: string): boolean => {
+    return /drive\.google\.com/.test(url);
+  };
+
+  /**
+   * Extracts Google Drive file ID from various URL formats.
+   */
+  const extractGoogleDriveFileId = (url: string): string | null => {
+    const patterns = [
+      /\/file\/d\/([a-zA-Z0-9_-]+)/,
+      /[?&]id=([a-zA-Z0-9_-]+)/,
+      /\/uc\?id=([a-zA-Z0-9_-]+)/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Converts a Google Drive URL to a viewable format.
+   */
+  const convertGoogleDriveToViewer = (url: string): string => {
+    const fileId = extractGoogleDriveFileId(url);
+    if (fileId) {
+      return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    return url;
+  };
+
+  /**
+   * Checks if a URL points to a directly viewable file (PDF, image, etc.).
+   */
+  const isDirectFileUrl = (url: string): boolean => {
+    const directFileExtensions = /\.(pdf|jpg|jpeg|png|gif|webp|svg|mp4|webm|mp3|ogg)$/i;
+    return directFileExtensions.test(url);
+  };
+
+  /**
+   * Converts a YouTube URL to an embeddable format.
+   */
+  const convertToYouTubeEmbed = (url: string): string => {
+    const videoId = extractYouTubeVideoId(url);
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    return url;
+  };
+
+  /**
+   * Converts various file hosting URLs to viewable formats.
+   */
+  const convertUrlToViewable = (url: string): string => {
+    if (isYouTubeUrl(url)) {
+      return convertToYouTubeEmbed(url);
+    }
+    if (isGoogleDriveUrl(url)) {
+      return convertGoogleDriveToViewer(url);
+    }
+    return url;
   };
 
   /**
@@ -192,9 +286,20 @@ const SharedTopicPage = () => {
   };
 
   /**
-   * Handles file preview.
+   * Handles file preview and link opening.
+   * For link-based notes, converts URLs to viewable formats.
    */
   const handlePreview = async (note: TopicNote) => {
+    // Handle link-based notes
+    if (isLinkNote(note) && note.content) {
+      setPreviewNote(note);
+      // Convert URLs to viewable formats (YouTube, Google Drive, etc.)
+      const urlToPreview = convertUrlToViewable(note.content);
+      setPreviewUrl(urlToPreview);
+      return;
+    }
+
+    // Handle file-based notes
     if (!note.file_url) return;
 
     const storagePath = extractStoragePath(note.file_url);
@@ -328,7 +433,7 @@ const SharedTopicPage = () => {
           </section>
         )}
 
-        {/* PPTs Section */}
+        {/* Resources Section (PPTs and Links) */}
         <section>
           <h2 className="text-sm font-semibold mb-3">Topic Resources</h2>
           {notes.length === 0 ? (
@@ -337,45 +442,67 @@ const SharedTopicPage = () => {
             </Card>
           ) : (
             <div className="space-y-3">
-              {notes.map((note) => (
-                <Card key={note.id} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <FileText className="w-4 h-4 text-primary" />
+              {notes.map((note) => {
+                const isLink = isLinkNote(note);
+                return (
+                  <Card key={note.id} className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        isLink ? "bg-blue-100 dark:bg-blue-900" : "bg-primary/10"
+                      }`}>
+                        {isLink ? (
+                          <LinkIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        ) : (
+                          <FileText className="w-4 h-4 text-primary" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{note.title}</p>
+                        {isLink ? (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {note.content}
+                          </p>
+                        ) : note.file_size != null ? (
+                          <p className="text-xs text-muted-foreground">
+                            {(note.file_size / (1024 * 1024)).toFixed(2)} MB
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{note.title}</p>
-                      {note.file_size != null && (
-                        <p className="text-xs text-muted-foreground">
-                          {(note.file_size / (1024 * 1024)).toFixed(2)} MB
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {note.file_url && (
-                      <>
+                    <div className="flex items-center gap-2">
+                      {isLink ? (
                         <Button
                           size="icon"
                           variant="outline"
                           onClick={() => handlePreview(note)}
-                          title="Preview"
+                          title="Open link"
                         >
-                          <Eye className="w-4 h-4" />
+                          <ExternalLink className="w-4 h-4" />
                         </Button>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => handleDownload(note)}
-                          title="Download"
-                        >
-                          <FileDown className="w-4 h-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </Card>
-              ))}
+                      ) : note.file_url ? (
+                        <>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => handlePreview(note)}
+                            title="Preview"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => handleDownload(note)}
+                            title="Download"
+                          >
+                            <FileDown className="w-4 h-4" />
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </section>
@@ -388,8 +515,112 @@ const SharedTopicPage = () => {
             </DialogHeader>
             <div className="mt-4">
               {previewUrl && previewNote && (
-                <div className="w-full h-[70vh]">
-                  {canPreviewInline(previewNote.file_name) ? (
+                <div className={`w-full ${isLinkNote(previewNote) && (isYouTubeUrl(previewNote.content || "") || isGoogleDriveUrl(previewNote.content || "")) ? "" : "h-[70vh]"}`}>
+                  {isLinkNote(previewNote) ? (
+                    // Link-based notes
+                    isYouTubeUrl(previewNote.content || "") ? (
+                      // YouTube links
+                      <div className="w-full flex flex-col border rounded bg-muted overflow-hidden">
+                        <div className="aspect-video w-full bg-black">
+                          <iframe
+                            src={previewUrl}
+                            className="w-full h-full border-0 rounded"
+                            title={previewNote.title}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
+                        <div className="p-3 border-t bg-background flex items-center justify-between shrink-0">
+                          <p className="text-xs text-muted-foreground truncate">
+                            Viewing: {previewNote.content}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(previewNote.content || "", "_blank")}
+                            >
+                              Open in new tab
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : isGoogleDriveUrl(previewNote.content || "") ? (
+                      // Google Drive links
+                      <div className="w-full flex flex-col border rounded bg-muted overflow-hidden">
+                        <div className="w-full" style={{ height: "70vh" }}>
+                          <iframe
+                            src={previewUrl}
+                            className="w-full h-full border-0"
+                            title={previewNote.title}
+                            allow="autoplay"
+                          />
+                        </div>
+                        <div className="p-3 border-t bg-background flex items-center justify-between shrink-0">
+                          <p className="text-xs text-muted-foreground truncate">
+                            Viewing: {previewNote.content}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(previewNote.content || "", "_blank")}
+                            >
+                              Open in new tab
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : isDirectFileUrl(previewNote.content || "") ? (
+                      // Direct file URLs
+                      <div className="w-full h-full flex flex-col border rounded bg-muted">
+                        <iframe
+                          src={previewUrl}
+                          className="w-full flex-1 border-0"
+                          title={previewNote.title}
+                        />
+                        <div className="p-3 border-t bg-background flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground truncate">
+                            Viewing: {previewNote.content}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(previewNote.content || "", "_blank")}
+                            >
+                              Open in new tab
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Other links
+                      <div className="w-full h-full flex flex-col border rounded bg-muted">
+                        <iframe
+                          src={previewUrl}
+                          className="w-full flex-1 border-0"
+                          title={previewNote.title}
+                          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                        />
+                        <div className="p-3 border-t bg-background flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground truncate">
+                            Viewing: {previewNote.content}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(previewNote.content || "", "_blank")}
+                            >
+                              Open in new tab
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  ) : canPreviewInline(previewNote.file_name) ? (
+                    // PDF files
                     <iframe
                       src={previewUrl}
                       className="w-full h-full border rounded"

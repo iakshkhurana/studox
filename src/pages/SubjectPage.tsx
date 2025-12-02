@@ -295,12 +295,15 @@ const SubjectPage = () => {
    */
   const handleToggleShare = async (topic: Topic) => {
     try {
+      // Get the most current topic state from the topics array to avoid stale data
+      const currentTopic = topics.find(t => t.id === topic.id) || topic;
+      
       // Treat null as false for is_shared
-      const currentIsShared = topic.is_shared ?? false;
+      const currentIsShared = currentTopic.is_shared ?? false;
       const newIsShared = !currentIsShared;
-      const shareToken = newIsShared && !topic.share_token 
+      const shareToken = newIsShared && !currentTopic.share_token 
         ? crypto.randomUUID() 
-        : topic.share_token;
+        : currentTopic.share_token;
 
       const { error, data } = await supabase
         .from("topics")
@@ -314,16 +317,16 @@ const SubjectPage = () => {
 
       if (error) throw error;
 
-      // Update local state immediately with the updated topic
+      // Update local state immediately with the updated topic from database
       // Ensure boolean values are properly set (not null)
       const updatedTopic = { 
-        ...topic, 
-        is_shared: newIsShared, 
-        share_token: shareToken 
+        ...data,
+        is_shared: data.is_shared ?? false, // Ensure boolean, not null
+        sort_order: data.sort_order ?? currentTopic.sort_order ?? 1,
       };
       setTopics(topics.map(t => t.id === topic.id ? updatedTopic : t));
 
-      if (newIsShared) {
+      if (newIsShared && shareToken) {
         // Generate the full share URL
         const fullShareUrl = `${window.location.origin}/shared/topic/${shareToken}`;
         
@@ -351,8 +354,9 @@ const SubjectPage = () => {
             description: "Please copy the link manually",
           });
         }
-      } else {
+      } else if (!newIsShared) {
         setShortenedUrl(null);
+        setShareDialogOpen(false);
         toast({
           title: "Sharing disabled",
           description: "This topic is no longer shared",
